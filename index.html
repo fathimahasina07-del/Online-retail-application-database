@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}ShopNest – Best Online Shopping{% endblock %}
+
+{% block content %}
+
+<!-- HERO BANNER -->
+<div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+            border-radius:14px; padding:50px 40px; margin-bottom:30px;
+            display:flex; align-items:center; justify-content:space-between;
+            overflow:hidden; position:relative;">
+  <div style="position:absolute;top:-30px;right:-30px;width:300px;height:300px;
+              background:rgba(255,107,53,0.15);border-radius:50%;"></div>
+  <div style="position:relative; z-index:1;">
+    <h1 style="color:#fff;font-size:2.4rem;font-weight:700;margin-bottom:12px;line-height:1.2">
+      Shop Everything<br><span style="color:#FF6B35;">You Love</span> 🛍️
+    </h1>
+    <p style="color:#aaa;font-size:1.05rem;margin-bottom:24px;max-width:400px;">
+      Millions of products. Fastest delivery. Best prices guaranteed every day.
+    </p>
+    <a href="#products" class="btn btn-primary" style="font-size:1rem;padding:14px 32px;">
+      Shop Now →
+    </a>
+  </div>
+  <div style="font-size:8rem;opacity:0.3;position:relative;z-index:1">🛒</div>
+</div>
+
+<!-- CATEGORIES GRID -->
+<h2 class="section-title">Shop by Category</h2>
+<div id="cats-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;margin-bottom:36px;"></div>
+
+<!-- FEATURED PRODUCTS -->
+<h2 class="section-title" id="products">Featured Products</h2>
+<div class="products-grid" id="products-grid">
+  <div class="loading-center" style="grid-column:1/-1">
+    <div class="spinner"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCategories() {
+  const res  = await fetch('/api/categories');
+  const cats = await res.json();
+  const grid = document.getElementById('cats-grid');
+  const colors = ['#FF6B35','#4ECDC4','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD','#98D8C8','#F7DC6F'];
+  grid.innerHTML = cats.map((c, i) => `
+    <a href="/category/${c.category_id}" style="text-decoration:none">
+      <div style="background:#fff;border-radius:10px;padding:20px 12px;
+                  text-align:center;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;
+                  box-shadow:0 2px 10px rgba(0,0,0,0.08);
+                  border-top:4px solid ${colors[i % colors.length]}"
+           onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.15)'"
+           onmouseout="this.style.transform='';this.style.boxShadow='0 2px 10px rgba(0,0,0,0.08)'">
+        <div style="font-size:2rem;margin-bottom:8px">${c.icon}</div>
+        <div style="font-size:0.78rem;font-weight:600;color:#333">${c.category_name}</div>
+      </div>
+    </a>
+  `).join('');
+}
+
+async function loadProducts() {
+  const res      = await fetch('/api/products?limit=30');
+  const products = await res.json();
+  const grid     = document.getElementById('products-grid');
+  if (!products.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="icon">📦</div><h3>No products found</h3></div>`;
+    return;
+  }
+  grid.innerHTML = products.map(p => productCardHTML(p)).join('');
+}
+
+loadCategories();
+loadProducts();
+</script>
+{% endblock %}

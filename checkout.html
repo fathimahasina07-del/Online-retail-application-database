@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Checkout – ShopNest{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/">Home</a> › <a href="/cart">Cart</a> › Checkout</div>
+<h1 style="font-size:1.8rem;font-weight:700;margin-bottom:24px">💳 Secure Checkout</h1>
+
+<div id="checkout-area">
+  <div class="loading-center"><div class="spinner"></div></div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<div id="success-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);
+     z-index:9999;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:40px;text-align:center;max-width:420px;width:90%;
+              animation:popIn 0.4s ease">
+    <div style="font-size:5rem;margin-bottom:16px">🎉</div>
+    <h2 style="color:#28a745;margin-bottom:10px">Order Placed!</h2>
+    <p style="color:#666;margin-bottom:8px" id="success-msg">Your order has been placed successfully.</p>
+    <p style="font-size:0.85rem;color:#999;margin-bottom:24px">
+      Order ID: <strong id="order-id-display"></strong>
+    </p>
+    <a href="/orders" class="btn btn-success" style="margin-right:10px">View Orders</a>
+    <a href="/" class="btn btn-outline">Continue Shopping</a>
+  </div>
+</div>
+
+<style>
+@keyframes popIn {
+  from { transform:scale(0.7); opacity:0; }
+  to   { transform:scale(1);   opacity:1; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCheckout() {
+  const res = await fetch('/api/cart');
+  if (res.status === 401) {
+    document.getElementById('checkout-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔐</div>
+        <h3>Please login to checkout</h3>
+        <a href="/login" class="btn btn-primary" style="margin-top:16px">Login</a>
+      </div>`;
+    return;
+  }
+  const items = await res.json();
+
+  if (!items.length) {
+    document.getElementById('checkout-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🛒</div>
+        <h3>Your cart is empty</h3>
+        <a href="/" class="btn btn-primary" style="margin-top:16px">Shop Now</a>
+      </div>`;
+    return;
+  }
+
+  // Get user info
+  const meRes = await fetch('/api/me');
+  const me    = await meRes.json();
+
+  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const shipping = subtotal * 84 > 499 ? 0 : 49;
+  const total    = subtotal * 84 + shipping;
+
+  document.getElementById('checkout-area').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start">
+
+      <!-- LEFT: FORM -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+
+        <!-- SHIPPING ADDRESS -->
+        <div class="card">
+          <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:18px">📍 Shipping Address</h3>
+          <div class="form-group">
+            <label>Full Name</label>
+            <input class="form-control" id="f-name" value="${me.name || ''}" placeholder="Your full name"/>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input class="form-control" id="f-email" value="${me.email || ''}" type="email"/>
+          </div>
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input class="form-control" id="f-phone" placeholder="+91 98765 43210" type="tel"/>
+          </div>
+          <div class="form-group">
+            <label>Full Address</label>
+            <textarea class="form-control" id="f-address" rows="3"
+                      placeholder="House No., Street, Area..."></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="form-group">
+              <label>City</label>
+              <input class="form-control" id="f-city" placeholder="Chennai"/>
+            </div>
+            <div class="form-group">
+              <label>PIN Code</label>
+              <input class="form-control" id="f-pin" placeholder="600001" type="number"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAYMENT METHOD -->
+        <div class="card">
+          <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:18px">💳 Payment Method</h3>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            ${[
+              ['COD',  '💵', 'Cash on Delivery', 'Pay when your order arrives'],
+              ['UPI',  '📱', 'UPI Payment',       'GPay, PhonePe, Paytm, BHIM'],
+              ['CARD', '💳', 'Credit / Debit Card','Visa, Mastercard, RuPay'],
+              ['NET',  '🏦', 'Net Banking',        'All major Indian banks'],
+            ].map(([val, icon, label, sub]) => `
+              <label style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid #eee;
+                            border-radius:8px;cursor:pointer;transition:border-color 0.2s"
+                     id="pay-label-${val}"
+                     onclick="selectPayment('${val}')">
+                <input type="radio" name="payment" value="${val}" ${val==='COD'?'checked':''} style="display:none"/>
+                <span style="font-size:1.6rem">${icon}</span>
+                <div>
+                  <div style="font-weight:600">${label}</div>
+                  <div style="font-size:0.8rem;color:#999">${sub}</div>
+                </div>
+              </label>
+            `).join('')}
+          </div>
+
+          <!-- UPI DETAILS (hidden by default) -->
+          <div id="upi-details" style="display:none;margin-top:14px;padding:14px;background:#f9f9f9;border-radius:8px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>UPI ID</label>
+              <input class="form-control" id="upi-id" placeholder="yourname@upi"/>
+            </div>
+          </div>
+
+          <!-- CARD DETAILS (hidden by default) -->
+          <div id="card-details" style="display:none;margin-top:14px;padding:14px;background:#f9f9f9;border-radius:8px">
+            <div class="form-group">
+              <label>Card Number</label>
+              <input class="form-control" id="card-num" placeholder="1234 5678 9012 3456" maxlength="19"/>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="form-group" style="margin-bottom:0">
+                <label>Expiry (MM/YY)</label>
+                <input class="form-control" id="card-exp" placeholder="12/28" maxlength="5"/>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>CVV</label>
+                <input class="form-control" id="card-cvv" placeholder="123" type="password" maxlength="3"/>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: ORDER SUMMARY -->
+      <div class="card" style="position:sticky;top:80px">
+        <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:18px;
+                   padding-bottom:14px;border-bottom:1px solid #eee">Order Summary</h3>
+        
+        <div style="max-height:250px;overflow-y:auto;margin-bottom:16px">
+          ${items.map(item => `
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+              <img src="${item.image_url || 'https://via.placeholder.com/50'}"
+                   alt="${item.name}"
+                   onerror="this.src='https://via.placeholder.com/50'"
+                   style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0"/>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                  ${item.name}
+                </div>
+                <div style="font-size:0.78rem;color:#999">Qty: ${item.quantity}</div>
+              </div>
+              <div style="font-weight:600;font-size:0.9rem;white-space:nowrap">
+                ₹${(item.price * item.quantity * 84).toFixed(0)}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div style="border-top:1px solid #eee;padding-top:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;color:#555">
+            <span>Subtotal</span><span>₹${(subtotal * 84).toFixed(0)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;color:#555">
+            <span>Shipping</span>
+            <span style="color:${shipping===0?'#28a745':'#333'}">${shipping===0?'FREE':'₹'+shipping}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:1.25rem;font-weight:700;
+                      border-top:2px solid #eee;padding-top:12px">
+            <span>Total</span>
+            <span style="color:#FF6B35">₹${total.toFixed(0)}</span>
+          </div>
+        </div>
+
+        <button id="place-order-btn" class="btn btn-primary btn-full"
+                style="margin-top:20px;font-size:1rem;padding:15px" onclick="placeOrder()">
+          🎉 Place Order
+        </button>
+        <div style="text-align:center;margin-top:12px;color:#999;font-size:0.78rem">
+          🔒 Payments are 100% secure & encrypted
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Highlight default COD
+  selectPayment('COD');
+}
+
+function selectPayment(val) {
+  ['COD','UPI','CARD','NET'].forEach(v => {
+    const el = document.getElementById(`pay-label-${v}`);
+    if (el) el.style.borderColor = v === val ? '#FF6B35' : '#eee';
+  });
+  document.getElementById('upi-details').style.display  = val === 'UPI'  ? 'block' : 'none';
+  document.getElementById('card-details').style.display = val === 'CARD' ? 'block' : 'none';
+}
+
+async function placeOrder() {
+  const name    = document.getElementById('f-name')?.value.trim();
+  const phone   = document.getElementById('f-phone')?.value.trim();
+  const address = document.getElementById('f-address')?.value.trim();
+  const city    = document.getElementById('f-city')?.value.trim();
+  const pin     = document.getElementById('f-pin')?.value.trim();
+
+  if (!name || !address || !city || !pin) {
+    return showToast('Please fill in all address fields.', 'error');
+  }
+  if (!phone) {
+    return showToast('Please enter your phone number.', 'error');
+  }
+
+  const paymentMethod = document.querySelector('input[name="payment"]')?.value || 'COD';
+  const fullAddress   = `${name}, ${phone}, ${address}, ${city} - ${pin}`;
+
+  const btn = document.getElementById('place-order-btn');
+  btn.disabled     = true;
+  btn.textContent  = '⏳ Placing Order...';
+
+  try {
+    const res  = await fetch('/api/checkout', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ address: fullAddress, payment_method: paymentMethod })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('order-id-display').textContent = `#${data.order_id}`;
+      document.getElementById('success-msg').textContent =
+        `Total: ₹${data.total * 84 | 0} | Payment: ${paymentMethod}`;
+      document.getElementById('success-modal').style.display = 'flex';
+      loadCartCount();
+    } else {
+      showToast(data.message || 'Something went wrong.', 'error');
+      btn.disabled    = false;
+      btn.textContent = '🎉 Place Order';
+    }
+  } catch(e) {
+    showToast('Network error. Please try again.', 'error');
+    btn.disabled    = false;
+    btn.textContent = '🎉 Place Order';
+  }
+}
+
+loadCheckout();
+</script>
+{% endblock %}

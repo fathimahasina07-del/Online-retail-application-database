@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Product – ShopNest{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/">Home</a> › <span id="bread-cat"></span> › <span id="bread-name"></span>
+</div>
+
+<div id="product-area">
+  <div class="loading-center"><div class="spinner"></div></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PRODUCT_ID = {{ product_id }};
+
+async function loadProduct() {
+  const res  = await fetch(`/api/product/${PRODUCT_ID}`);
+  if (!res.ok) {
+    document.getElementById('product-area').innerHTML =
+      '<div class="empty-state"><div class="icon">❌</div><h3>Product not found.</h3></div>';
+    return;
+  }
+  const p = await res.json();
+
+  // Breadcrumb
+  document.getElementById('bread-cat').innerHTML =
+    `<a href="/category/${p.category_id}">${p.category_name}</a>`;
+  document.getElementById('bread-name').textContent = p.name;
+  document.title = p.name + ' – ShopNest';
+
+  const oldPrice  = (p.price * 1.2 * 84).toFixed(0);
+  const newPrice  = (p.price * 84).toFixed(0);
+  const discount  = Math.round(((oldPrice - newPrice) / oldPrice) * 100);
+
+  document.getElementById('product-area').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:start">
+      <!-- IMAGE -->
+      <div>
+        <img id="main-img" src="${p.image_url || 'https://via.placeholder.com/600x500'}"
+             alt="${p.name}" onerror="this.src='https://via.placeholder.com/600x500?text=No+Image'"
+             style="width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.12);max-height:450px;object-fit:cover" />
+      </div>
+      <!-- DETAILS -->
+      <div class="card">
+        <span style="background:#e8f5e9;color:#28a745;font-size:0.75rem;font-weight:600;padding:4px 10px;border-radius:20px">
+          ${p.category_name}
+        </span>
+        <h1 style="font-size:1.5rem;font-weight:700;margin:14px 0 10px">${p.name}</h1>
+        
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          ${starsHTML(p.rating)}
+          <span style="color:#666;font-size:0.9rem">${p.rating} out of 5 (${p.reviews?.toLocaleString()} ratings)</span>
+        </div>
+
+        <div style="border-top:1px solid #eee;border-bottom:1px solid #eee;padding:16px 0;margin-bottom:16px">
+          <div style="font-size:0.85rem;color:#999;text-decoration:line-through">₹${oldPrice}</div>
+          <div style="font-size:2rem;font-weight:700;color:#FF6B35">₹${newPrice}</div>
+          <span style="background:#FF6B35;color:#fff;font-size:0.75rem;font-weight:700;padding:3px 9px;border-radius:4px">
+            ${discount}% OFF
+          </span>
+        </div>
+
+        <p style="color:#555;line-height:1.7;margin-bottom:20px">${p.description || 'No description available.'}</p>
+
+        <div style="margin-bottom:18px">
+          <span style="font-weight:600">Availability: </span>
+          ${p.stock > 0
+            ? `<span style="color:#28a745">✅ In Stock (${p.stock} left)</span>`
+            : `<span style="color:#dc3545">❌ Out of Stock</span>`}
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <label style="font-weight:600">Qty:</label>
+          <div style="display:flex;align-items:center;border:1.5px solid #ddd;border-radius:6px;overflow:hidden">
+            <button onclick="changeQty(-1)" style="padding:8px 14px;background:#f5f5f5;border:none;cursor:pointer;font-size:1rem">−</button>
+            <span id="qty-display" style="padding:8px 16px;font-weight:600">1</span>
+            <button onclick="changeQty(1)" style="padding:8px 14px;background:#f5f5f5;border:none;cursor:pointer;font-size:1rem">+</button>
+          </div>
+        </div>
+
+        ${p.stock > 0 ? `
+          <button class="btn btn-primary btn-full" style="margin-bottom:10px;font-size:1rem;padding:14px"
+                  onclick="doAddToCart()">
+            🛒 Add to Cart
+          </button>
+          <button class="btn btn-secondary btn-full" style="font-size:1rem;padding:14px"
+                  onclick="buyNow()">
+            ⚡ Buy Now
+          </button>
+        ` : `
+          <button class="btn btn-full" disabled
+                  style="background:#ccc;color:#fff;font-size:1rem;padding:14px;cursor:not-allowed">
+            Out of Stock
+          </button>
+        `}
+
+        <div style="margin-top:20px;padding:14px;background:#f9f9f9;border-radius:8px;font-size:0.85rem;color:#555">
+          🚚 <strong>Free delivery</strong> on orders over ₹499<br>
+          🔄 <strong>30-day returns</strong> hassle-free<br>
+          🔒 <strong>Secure payment</strong> guaranteed
+        </div>
+      </div>
+    </div>
+
+    <!-- REVIEWS SECTION -->
+    <div style="margin-top:30px">
+      <h2 class="section-title">Customer Reviews</h2>
+      <div id="reviews-list" style="margin-bottom:24px"></div>
+
+      <!-- ADD REVIEW FORM -->
+      <div class="card" id="review-form-area">
+        <h3 style="margin-bottom:16px;font-size:1.1rem">Write a Review</h3>
+        <div style="margin-bottom:14px">
+          <label style="font-weight:600;display:block;margin-bottom:8px">Your Rating</label>
+          <div id="star-picker" style="display:flex;gap:6px;font-size:1.8rem;cursor:pointer">
+            ${[1,2,3,4,5].map(i =>
+              `<span onclick="setRating(${i})" id="star-${i}" style="color:#ddd;transition:color 0.15s">★</span>`
+            ).join('')}
+          </div>
+        </div>
+        <textarea id="review-comment" class="form-control" rows="3"
+                  placeholder="Share your experience with this product..."></textarea>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="submitReview()">
+          Submit Review
+        </button>
+      </div>
+    </div>
+
+    <!-- SIMILAR PRODUCTS -->
+    <div style="margin-top:30px">
+      <h2 class="section-title">Similar Products</h2>
+      <div class="products-grid" id="similar-grid">
+        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+  `;
+
+  renderReviews(p.user_reviews || []);
+  loadSimilar(p.category_id, PRODUCT_ID);
+}
+
+let selectedRating = 0;
+let currentQty     = 1;
+let currentStock   = 0;
+
+function changeQty(delta) {
+  currentQty = Math.max(1, Math.min(currentStock, currentQty + delta));
+  document.getElementById('qty-display').textContent = currentQty;
+}
+
+function setRating(r) {
+  selectedRating = r;
+  for (let i = 1; i <= 5; i++) {
+    const s = document.getElementById(`star-${i}`);
+    if (s) s.style.color = i <= r ? '#f39c12' : '#ddd';
+  }
+}
+
+async function doAddToCart() {
+  await addToCart(PRODUCT_ID, currentQty);
+}
+
+async function buyNow() {
+  await addToCart(PRODUCT_ID, currentQty);
+  window.location.href = '/cart';
+}
+
+async function submitReview() {
+  if (!selectedRating) return showToast('Please select a rating.', 'error');
+  const comment = document.getElementById('review-comment').value.trim();
+  const res  = await fetch('/api/review/add', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ product_id: PRODUCT_ID, rating: selectedRating, comment })
+  });
+  const data = await res.json();
+  showToast(data.message, data.success ? 'success' : 'error');
+  if (data.success) {
+    document.getElementById('review-comment').value = '';
+    setRating(0);
+    selectedRating = 0;
+    loadProduct();
+  }
+}
+
+function renderReviews(reviews) {
+  const el = document.getElementById('reviews-list');
+  if (!el) return;
+  if (!reviews.length) {
+    el.innerHTML = '<p style="color:#999">No reviews yet. Be the first to review!</p>';
+    return;
+  }
+  el.innerHTML = reviews.map(r => `
+    <div style="background:#fff;border-radius:10px;padding:18px;margin-bottom:14px;
+                box-shadow:0 2px 10px rgba(0,0,0,0.07)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <strong>${r.user_name}</strong>
+          <span style="color:#f39c12;margin-left:10px">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
+        </div>
+        <span style="color:#999;font-size:0.8rem">${r.created_at?.split('T')[0] || r.created_at}</span>
+      </div>
+      <p style="color:#555;line-height:1.6">${r.comment || '<em>No comment</em>'}</p>
+    </div>
+  `).join('');
+}
+
+async function loadSimilar(catId, excludeId) {
+  const res      = await fetch(`/api/products/category/${catId}`);
+  const products = await res.json();
+  const filtered = products.filter(p => p.product_id !== excludeId).slice(0, 4);
+  const grid     = document.getElementById('similar-grid');
+  if (!grid) return;
+  grid.innerHTML = filtered.length
+    ? filtered.map(p => productCardHTML(p)).join('')
+    : '<p style="color:#999">No similar products found.</p>';
+  // Store stock for qty control
+  const productData = await fetch(`/api/product/${PRODUCT_ID}`).then(r => r.json());
+  currentStock = productData.stock || 99;
+}
+
+loadProduct();
+</script>
+{% endblock %}

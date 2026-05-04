@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}My Orders – ShopNest{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/">Home</a> › My Orders</div>
+<h1 style="font-size:1.8rem;font-weight:700;margin-bottom:24px">📦 My Orders</h1>
+<div id="orders-area"><div class="loading-center"><div class="spinner"></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadOrders() {
+  const res = await fetch('/api/orders');
+  if (res.status === 401) {
+    document.getElementById('orders-area').innerHTML = `
+      <div class="empty-state"><div class="icon">🔐</div><h3>Please login</h3>
+      <a href="/login" class="btn btn-primary" style="margin-top:16px">Login</a></div>`;
+    return;
+  }
+  const orders = await res.json();
+  if (!orders.length) {
+    document.getElementById('orders-area').innerHTML = `
+      <div class="empty-state"><div class="icon">📦</div><h3>No orders yet</h3>
+      <p>Start shopping to see your orders here.</p>
+      <a href="/" class="btn btn-primary" style="margin-top:16px">Shop Now</a></div>`;
+    return;
+  }
+  const statusColor = { Confirmed:'#28a745', Pending:'#ffc107', Shipped:'#17a2b8', Delivered:'#6610f2', Cancelled:'#dc3545' };
+  document.getElementById('orders-area').innerHTML = orders.map(o => `
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:1rem">Order #${o.order_id}</div>
+          <div style="font-size:0.82rem;color:#999;margin-top:2px">
+            Placed: ${o.ordered_at?.replace('T',' ').split('.')[0] || o.ordered_at}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <span style="background:${statusColor[o.status]||'#666'}20;color:${statusColor[o.status]||'#666'};
+                       font-weight:600;font-size:0.82rem;padding:4px 12px;border-radius:20px">
+            ${o.status}
+          </span>
+          <div style="font-size:1.1rem;font-weight:700;color:#FF6B35">
+            ₹${(o.total_amount * 84).toFixed(0)}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px">
+        ${o.items.map(item => `
+          <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;
+                      background:#f9f9f9;border-radius:8px;padding:10px;min-width:220px">
+            <img src="${item.image_url || 'https://via.placeholder.com/60'}"
+                 alt="${item.name}"
+                 onerror="this.src='https://via.placeholder.com/60'"
+                 style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer"
+                 onclick="window.location.href='/product/${item.product_id}'"/>
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;margin-bottom:4px">${item.name}</div>
+              <div style="font-size:0.78rem;color:#999">Qty: ${item.quantity} × ₹${(item.price*84).toFixed(0)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #eee;
+                  display:flex;gap:14px;flex-wrap:wrap;font-size:0.82rem;color:#666">
+        <span>💳 ${o.payment_method || 'COD'}</span>
+        <span>📍 ${o.shipping_addr?.substring(0, 60)}${o.shipping_addr?.length > 60 ? '...' : ''}</span>
+      </div>
+    </div>
+  `).join('');
+}
+loadOrders();
+</script>
+{% endblock %}

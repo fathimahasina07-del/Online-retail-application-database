@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Category – ShopNest{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/">Home</a> › <span id="cat-name">Category</span></div>
+<h1 id="cat-heading" style="font-size:1.8rem;font-weight:700;margin-bottom:24px">Loading...</h1>
+<div class="products-grid" id="cat-grid">
+  <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const CAT_ID = {{ cat_id }};
+async function loadCategory() {
+  const catRes   = await fetch('/api/categories');
+  const cats     = await catRes.json();
+  const cat      = cats.find(c => c.category_id === CAT_ID);
+  const catName  = cat ? `${cat.icon} ${cat.category_name}` : 'Category';
+  document.getElementById('cat-name').textContent    = cat?.category_name || '';
+  document.getElementById('cat-heading').textContent = catName;
+  document.title = `${catName} – ShopNest`;
+
+  const res      = await fetch(`/api/products/category/${CAT_ID}`);
+  const products = await res.json();
+  const grid     = document.getElementById('cat-grid');
+  grid.innerHTML = products.length
+    ? products.map(p => productCardHTML(p)).join('')
+    : `<div class="empty-state" style="grid-column:1/-1">
+         <div class="icon">📦</div>
+         <h3>No products in this category</h3>
+         <a href="/" class="btn btn-primary" style="margin-top:16px">Browse All</a>
+       </div>`;
+}
+loadCategory();
+</script>
+{% endblock %}

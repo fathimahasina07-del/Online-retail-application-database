@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Your Cart – ShopNest{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/">Home</a> › Shopping Cart</div>
+<h1 style="font-size:1.8rem;font-weight:700;margin-bottom:24px">🛒 Your Shopping Cart</h1>
+
+<div id="cart-area">
+  <div class="loading-center"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCart() {
+  const res = await fetch('/api/cart');
+  if (res.status === 401) {
+    document.getElementById('cart-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔐</div>
+        <h3>Please login to view your cart</h3>
+        <a href="/login" class="btn btn-primary" style="margin-top:16px">Login</a>
+      </div>`;
+    return;
+  }
+  const items = await res.json();
+
+  if (!items.length) {
+    document.getElementById('cart-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🛒</div>
+        <h3>Your cart is empty</h3>
+        <p>Looks like you haven't added anything yet.</p>
+        <a href="/" class="btn btn-primary" style="margin-top:16px">Start Shopping</a>
+      </div>`;
+    return;
+  }
+
+  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const shipping = subtotal * 84 > 499 ? 0 : 49;
+  const total    = subtotal * 84 + shipping;
+
+  document.getElementById('cart-area').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+      <!-- CART ITEMS -->
+      <div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="background:#f5f5f5;padding:14px 20px;border-bottom:1px solid #eee;
+                      display:flex;align-items:center;justify-content:space-between">
+            <strong>${items.length} item${items.length > 1 ? 's' : ''} in cart</strong>
+            <span style="color:#999;font-size:0.85rem">Price</span>
+          </div>
+          ${items.map(item => `
+            <div id="cart-row-${item.cart_id}"
+                 style="display:flex;align-items:center;gap:16px;padding:20px;border-bottom:1px solid #f0f0f0">
+              <img src="${item.image_url || 'https://via.placeholder.com/100'}"
+                   alt="${item.name}"
+                   onerror="this.src='https://via.placeholder.com/100?text=IMG'"
+                   onclick="window.location.href='/product/${item.product_id}'"
+                   style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0"/>
+              <div style="flex:1">
+                <div style="font-weight:600;margin-bottom:4px;cursor:pointer"
+                     onclick="window.location.href='/product/${item.product_id}'">${item.name}</div>
+                <div style="color:#28a745;font-size:0.82rem;margin-bottom:10px">In Stock</div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <!-- QTY CONTROL -->
+                  <div style="display:flex;align-items:center;border:1.5px solid #ddd;border-radius:6px;overflow:hidden">
+                    <button onclick="updateQty(${item.cart_id}, ${item.quantity - 1})"
+                            style="padding:6px 12px;border:none;background:#f5f5f5;cursor:pointer;font-size:0.9rem">−</button>
+                    <span style="padding:6px 14px;font-weight:600">${item.quantity}</span>
+                    <button onclick="updateQty(${item.cart_id}, ${item.quantity + 1})"
+                            style="padding:6px 12px;border:none;background:#f5f5f5;cursor:pointer;font-size:0.9rem">+</button>
+                  </div>
+                  <button onclick="removeItem(${item.cart_id})"
+                          style="background:none;border:none;color:#dc3545;cursor:pointer;font-size:0.85rem;font-weight:500">
+                    🗑 Remove
+                  </button>
+                </div>
+              </div>
+              <div style="font-size:1.2rem;font-weight:700;color:#FF6B35;white-space:nowrap">
+                ₹${(item.price * item.quantity * 84).toFixed(0)}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- ORDER SUMMARY -->
+      <div class="card" style="position:sticky;top:80px">
+        <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:20px;
+                   padding-bottom:14px;border-bottom:1px solid #eee">
+          Order Summary
+        </h3>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:#555">Subtotal (${items.length} items)</span>
+            <span>₹${(subtotal * 84).toFixed(0)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:#555">Shipping</span>
+            <span style="color:${shipping === 0 ? '#28a745' : '#333'}">
+              ${shipping === 0 ? 'FREE ✅' : '₹' + shipping}
+            </span>
+          </div>
+          ${shipping > 0 ? `<div style="font-size:0.8rem;color:#999">Add ₹${(499 - subtotal*84).toFixed(0)} more for free shipping</div>` : ''}
+          <div style="border-top:2px solid #eee;padding-top:12px;
+                      display:flex;justify-content:space-between;font-size:1.2rem;font-weight:700">
+            <span>Total</span>
+            <span style="color:#FF6B35">₹${total.toFixed(0)}</span>
+          </div>
+        </div>
+        <a href="/checkout" class="btn btn-primary btn-full" style="text-align:center;font-size:1rem;padding:14px">
+          Proceed to Checkout →
+        </a>
+        <a href="/" class="btn btn-outline btn-full" style="margin-top:10px;text-align:center">
+          ← Continue Shopping
+        </a>
+        <div style="text-align:center;margin-top:16px;color:#999;font-size:0.8rem">
+          🔒 Secure checkout guaranteed
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function updateQty(cartId, newQty) {
+  if (newQty < 1) return removeItem(cartId);
+  const res = await fetch('/api/cart/update', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ cart_id: cartId, quantity: newQty })
+  });
+  const data = await res.json();
+  if (data.success) {
+    loadCart();
+    loadCartCount();
+  }
+}
+
+async function removeItem(cartId) {
+  const res = await fetch('/api/cart/remove', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ cart_id: cartId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Item removed from cart', 'info');
+    loadCart();
+    loadCartCount();
+  }
+}
+
+loadCart();
+</script>
+{% endblock %}

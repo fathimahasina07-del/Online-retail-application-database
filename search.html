@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Search – ShopNest{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/">Home</a> › Search Results</div>
+<h1 id="search-heading" style="font-size:1.5rem;font-weight:700;margin-bottom:24px">Searching...</h1>
+<div class="products-grid" id="results-grid">
+  <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const params = new URLSearchParams(window.location.search);
+const q      = params.get('q') || '';
+document.getElementById('search-input').value = q;
+
+async function search() {
+  if (!q) {
+    document.getElementById('search-heading').textContent = 'Please enter a search term.';
+    document.getElementById('results-grid').innerHTML = '';
+    return;
+  }
+  document.getElementById('search-heading').textContent = `Results for "${q}"`;
+  const res      = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  const products = await res.json();
+  const grid     = document.getElementById('results-grid');
+  document.getElementById('search-heading').textContent =
+    `${products.length} result${products.length !== 1 ? 's' : ''} for "${q}"`;
+  grid.innerHTML = products.length
+    ? products.map(p => productCardHTML(p)).join('')
+    : `<div class="empty-state" style="grid-column:1/-1">
+         <div class="icon">🔍</div>
+         <h3>No products found</h3>
+         <p>Try different keywords or browse categories.</p>
+         <a href="/" class="btn btn-primary" style="margin-top:16px">Browse All</a>
+       </div>`;
+}
+search();
+</script>
+{% endblock %}
